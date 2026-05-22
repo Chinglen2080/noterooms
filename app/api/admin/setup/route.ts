@@ -2,25 +2,23 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { hashPassword } from '@/lib/crypto'
 
-function getSupabase() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getSupabase(): ReturnType<typeof createClient> & { from: (t: string) => any } {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  ) as ReturnType<typeof createClient> & { from: (t: string) => any }
 }
 
-// GET: check if setup is needed
 export async function GET() {
   const supabase = getSupabase()
   const { data } = await supabase.from('admin_passwords').select('id').limit(1)
   return NextResponse.json({ needsSetup: !data || data.length === 0 })
 }
 
-// POST: set initial passwords (only works if table is empty)
 export async function POST(req: Request) {
   const supabase = getSupabase()
 
-  // Guard: only allowed if no passwords exist yet
   const { data: existing } = await supabase.from('admin_passwords').select('id').limit(1)
   if (existing && existing.length > 0)
     return NextResponse.json({ error: 'Already set up' }, { status: 403 })

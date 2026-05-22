@@ -40,15 +40,33 @@ create table if not exists app_settings (
   value text not null
 );
 
+-- Admin auth: hashed passwords (main + duress)
+create table if not exists admin_passwords (
+  id uuid primary key default gen_random_uuid(),
+  password_hash text not null,
+  is_main boolean default true,
+  is_duress boolean default false,
+  requires_change boolean default false
+);
+
+-- Duress event log
+create table if not exists duress_events (
+  id uuid primary key default gen_random_uuid(),
+  triggered_at timestamptz not null
+);
+
 -- RLS
 alter table rooms enable row level security;
 alter table messages enable row level security;
 alter table banned_users enable row level security;
 alter table app_settings enable row level security;
+alter table admin_passwords enable row level security;
+alter table duress_events enable row level security;
 
 create policy "Public read rooms" on rooms for select using (true);
 create policy "Public read messages" on messages for select using (true);
 create policy "Public insert messages" on messages for insert with check (true);
+-- admin_passwords + duress_events: service role only (no public policy)
 
 -- Expired rooms auto-cleanup (optional cron)
 -- delete from messages where room_id in (select id from rooms where expires_at < now());

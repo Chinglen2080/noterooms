@@ -2,7 +2,7 @@ import { getSupabase } from '@/lib/supabase'
 import { NextResponse } from 'next/server'
 
 function checkAuth(req: Request) {
-  return req.headers.get('x-admin-secret') === process.env.ADMIN_SECRET
+  return req.headers.get('x-admin-token') === process.env.ADMIN_TOKEN
 }
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {

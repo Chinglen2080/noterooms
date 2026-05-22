@@ -77,14 +77,8 @@ export default function Lobby() {
     return duration
   }
 
-  function addPassword() {
-    setPasswords(p => [...p, { pw: '', lockedUser: '' }])
-  }
-
-  function removePassword(i: number) {
-    setPasswords(p => p.filter((_, idx) => idx !== i))
-  }
-
+  function addPassword() { setPasswords(p => [...p, { pw: '', lockedUser: '' }]) }
+  function removePassword(i: number) { setPasswords(p => p.filter((_, idx) => idx !== i)) }
   function updatePassword(i: number, field: 'pw' | 'lockedUser', val: string) {
     setPasswords(p => p.map((x, idx) => idx === i ? { ...x, [field]: val } : x))
   }
@@ -105,10 +99,7 @@ export default function Lobby() {
         slug: cleanSlug,
         label: label.trim(),
         duration_minutes: mins,
-        passwords: validPws.map(p => ({
-          plaintext: p.pw.trim(),
-          locked_user: p.lockedUser.trim() || null,
-        })),
+        passwords: validPws.map(p => ({ plaintext: p.pw.trim(), locked_user: p.lockedUser.trim() || null })),
         password_removable: passwordRemovable,
       }),
     })
@@ -126,12 +117,11 @@ export default function Lobby() {
       try {
         const json = JSON.parse(ev.target?.result as string)
         if (!json.room?.slug) throw new Error('invalid export file')
-        // if room still exists, navigate; otherwise show import error
         fetch(`/api/rooms/${json.room.slug}`)
           .then(r => r.json())
           .then(d => {
             if (d.error) {
-              setImportError(`Room "/${json.room.slug}" no longer exists (expired or deleted). The export contained ${json.messages?.length ?? 0} messages.`)
+              setImportError(`room "/${json.room.slug}" no longer exists. export had ${json.messages?.length ?? 0} messages.`)
             } else {
               router.push(`/room/${json.room.slug}`)
             }
@@ -181,8 +171,7 @@ export default function Lobby() {
                   {opt.label}
                 </button>
               ))}
-              <button type="button"
-                onClick={() => setUseCustom(true)}
+              <button type="button" onClick={() => setUseCustom(true)}
                 style={{
                   padding: '0.3rem 0.75rem', borderRadius: 6,
                   border: `1px solid ${useCustom ? 'var(--accent)' : 'var(--border)'}`,
@@ -195,15 +184,10 @@ export default function Lobby() {
             </div>
             {useCustom && (
               <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
-                <input
-                  type="number" min={1} step={1}
-                  value={customDuration}
+                <input type="number" min={1} step={1} value={customDuration}
                   onChange={e => setCustomDuration(e.target.value)}
-                  placeholder="amount"
-                  style={{ ...s.input, width: 100 }}
-                />
-                <select
-                  value={customUnit}
+                  placeholder="amount" style={{ ...s.input, width: 100 }} />
+                <select value={customUnit}
                   onChange={e => setCustomUnit(e.target.value as 'minutes' | 'hours' | 'days')}
                   style={{ ...s.input, width: 'auto', paddingRight: '0.5rem' }}>
                   <option value="minutes">minutes</option>
@@ -214,18 +198,15 @@ export default function Lobby() {
             )}
           </div>
 
-          {/* advanced options */}
           <div>
-            <button type="button"
-              onClick={() => setShowAdvanced(a => !a)}
+            <button type="button" onClick={() => setShowAdvanced(a => !a)}
               style={{ fontSize: '0.78rem', color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-              <span style={{ display: 'inline-block', transform: showAdvanced ? 'rotate(90deg)' : 'none', transition: 'transform 150ms' }}>▶</span>
+              <span style={{ display: 'inline-block', transform: showAdvanced ? 'rotate(90deg)' : 'none', transition: 'transform 150ms' }}>&#9658;</span>
               advanced options
             </button>
 
             {showAdvanced && (
               <div style={{ marginTop: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.65rem', padding: '0.85rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface2)' }}>
-
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
                     <span style={s.label as React.CSSProperties}>passwords (E2E encrypted)</span>
@@ -235,35 +216,27 @@ export default function Lobby() {
                     </button>
                   </div>
                   {passwords.length === 0 && (
-                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>no passwords — room is public and messages are plaintext.</p>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>no passwords set — room is public, messages are plaintext.</p>
                   )}
                   {passwords.map((p, i) => (
                     <div key={i} style={{ display: 'flex', gap: '0.35rem', marginBottom: '0.35rem', alignItems: 'center' }}>
-                      <input
-                        type="password"
-                        placeholder={`password ${i + 1}`}
-                        value={p.pw}
+                      <input type="password" placeholder={`password ${i + 1}`} value={p.pw}
                         onChange={e => updatePassword(i, 'pw', e.target.value)}
-                        style={{ ...s.input, flex: 1 }}
-                      />
-                      <input
-                        placeholder="lock to user (optional)"
-                        value={p.lockedUser}
+                        style={{ ...s.input, flex: 1 }} />
+                      <input placeholder="lock to user (optional)" value={p.lockedUser}
                         onChange={e => updatePassword(i, 'lockedUser', e.target.value)}
-                        style={{ ...s.input, flex: 1 }}
-                      />
+                        style={{ ...s.input, flex: 1 }} />
                       <button type="button" onClick={() => removePassword(i)}
-                        style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', flexShrink: 0 }}>✕</button>
+                        style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', flexShrink: 0 }}>x</button>
                     </div>
                   ))}
                   {passwords.length > 0 && (
                     <p style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '0.25rem' }}>
                       messages are encrypted in your browser. the server never sees plaintext.
-                      if "lock to user" is blank, the first person to use that password claims it.
+                      if lock to user is blank, the first person to use that password claims it.
                     </p>
                   )}
                 </div>
-
                 {passwords.length > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <input type="checkbox" id="pw-removable" checked={passwordRemovable}
@@ -278,14 +251,13 @@ export default function Lobby() {
           </div>
 
           {error && <p style={{ fontSize: '0.8rem', color: 'var(--error)' }}>{error}</p>}
-          <button type="submit" style={s.btn} disabled={creating}>{creating ? 'creating...' : 'create room →'}</button>
+          <button type="submit" style={s.btn} disabled={creating}>{creating ? 'creating...' : 'create room'}</button>
         </form>
       </div>
 
-      {/* import */}
       <div style={{ marginBottom: '1.5rem' }}>
         <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
-        <button style={s.btnGhost} onClick={() => importRef.current?.click()}>↑ import chat</button>
+        <button style={s.btnGhost} onClick={() => importRef.current?.click()}>import chat</button>
         {importError && <p style={{ fontSize: '0.78rem', color: 'var(--error)', marginTop: '0.35rem' }}>{importError}</p>}
       </div>
 
@@ -304,7 +276,7 @@ export default function Lobby() {
                 <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>{room.message_count} msg{room.message_count !== 1 ? 's' : ''}</span>
               )}
               {room.has_password && (
-                <span style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: 99, border: '1px solid var(--border)', color: 'var(--muted)' }}>🔒</span>
+                <span style={{ fontSize: '0.68rem', padding: '0.1rem 0.4rem', borderRadius: 99, border: '1px solid var(--border)', color: 'var(--muted)' }}>locked</span>
               )}
             </div>
             <span style={s.tag}>{timeLeft(room.expires_at)}</span>

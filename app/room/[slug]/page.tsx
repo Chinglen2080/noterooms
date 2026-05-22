@@ -65,10 +65,6 @@ function renderContent(text: string): React.ReactNode[] {
   return parts
 }
 
-// ---------------------------------------------------------------------------
-// E2E crypto — AES-256-GCM, key derived via PBKDF2 from room password
-// ---------------------------------------------------------------------------
-
 async function deriveKey(password: string, roomSlug: string): Promise<CryptoKey> {
   const enc = new TextEncoder()
   const keyMaterial = await crypto.subtle.importKey(
@@ -111,10 +107,6 @@ const inp: React.CSSProperties = {
   color: 'var(--fg)', fontSize: '0.875rem', width: '100%'
 }
 
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export default function RoomPage() {
   const params = useParams()
   const router = useRouter()
@@ -133,15 +125,12 @@ export default function RoomPage() {
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // password gate
   const [needsPassword, setNeedsPassword] = useState(false)
   const [pwInput, setPwInput] = useState('')
   const [pwError, setPwError] = useState('')
   const [cryptoKey, setCryptoKey] = useState<CryptoKey | null>(null)
   const [authedToken, setAuthedToken] = useState<string | null>(null)
-  const [isCreator, setIsCreator] = useState(false)
 
-  // options dropdown
   const [showOptions, setShowOptions] = useState(false)
   const optionsRef = useRef<HTMLDivElement>(null)
 
@@ -153,9 +142,7 @@ export default function RoomPage() {
       .then(d => {
         if (d.error) { setNotFound(true); return }
         setRoom(d)
-        setIsCreator(getCookie(`room_creator_${d.slug}`) === 'true')
         if (d.has_password) {
-          // check if we already have a session token cached
           const cached = getCookie(`room_auth_${d.slug}`)
           const cachedPw = getCookie(`room_pw_${d.slug}`)
           if (cached && cachedPw) {
@@ -170,7 +157,6 @@ export default function RoomPage() {
       })
   }, [slug])
 
-  // poll messages + decrypt if needed
   useEffect(() => {
     if (!room) return
     if (room.has_password && !authedToken) return
@@ -195,7 +181,6 @@ export default function RoomPage() {
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
 
-  // close dropdown on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (optionsRef.current && !optionsRef.current.contains(e.target as Node))
@@ -232,7 +217,6 @@ export default function RoomPage() {
       headers: { 'Content-Type': 'application/json', 'x-auth-token': authedToken },
     })
     if (res.ok) {
-      // invalidate local session
       document.cookie = `room_auth_${slug}=; max-age=0; path=/`
       document.cookie = `room_pw_${slug}=; max-age=0; path=/`
       setAuthedToken(null)
@@ -241,11 +225,7 @@ export default function RoomPage() {
     }
   }
 
-  function setReply(msg: Message) {
-    setReplyTo(msg)
-    inputRef.current?.focus()
-  }
-
+  function setReply(msg: Message) { setReplyTo(msg); inputRef.current?.focus() }
   function clearReply() { setReplyTo(null) }
 
   function getDisplayContent(m: Message): string {
@@ -290,10 +270,6 @@ export default function RoomPage() {
     const exportMessages = messages.map(m => ({
       ...m,
       content: cryptoKey ? (decryptedMessages[m.id] ?? m.content) : m.content,
-      reply_preview: m.reply_preview ? {
-        ...m.reply_preview,
-        content: m.reply_preview.content,
-      } : null,
     }))
     let blob: Blob
     let filename: string
@@ -302,7 +278,15 @@ export default function RoomPage() {
       blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
       filename = `noterooms-${room.slug}-${Date.now()}.json`
     } else {
-      const lines = [`room: ${room.label || room.slug} (/${room.slug})`, `exported: ${new Date().toLocaleString()}`, `expires: ${room.expires_at}`, '', ...exportMessages.map(m => `[${new Date(m.created_at).toLocaleString()}] ${m.username}: ${m.reply_preview ? `(reply to ${m.reply_preview.username}: ${m.reply_preview.content.slice(0, 40)}…) ` : ''}${m.content}`)]
+      const lines = [
+        `room: ${room.label || room.slug} (/${room.slug})`,
+        `exported: ${new Date().toLocaleString()}`,
+        `expires: ${room.expires_at}`,
+        '',
+        ...exportMessages.map(m =>
+          `[${new Date(m.created_at).toLocaleString()}] ${m.username}: ${m.reply_preview ? `(reply to ${m.reply_preview.username}: ${m.reply_preview.content.slice(0, 40)}...) ` : ''}${m.content}`
+        )
+      ]
       blob = new Blob([lines.join('\n')], { type: 'text/plain' })
       filename = `noterooms-${room.slug}-${Date.now()}.txt`
     }
@@ -314,11 +298,10 @@ export default function RoomPage() {
     setShowOptions(false)
   }
 
-  // ---- render gates ----
   if (notFound) return (
     <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
       <p style={{ fontWeight: 600 }}>room not found or expired</p>
-      <button onClick={() => router.push('/')} style={{ color: 'var(--accent)', background: 'none', border: 'none', fontSize: '0.875rem', cursor: 'pointer' }}>← back to lobby</button>
+      <button onClick={() => router.push('/')} style={{ color: 'var(--accent)', background: 'none', border: 'none', fontSize: '0.875rem', cursor: 'pointer' }}>back to lobby</button>
     </main>
   )
 
@@ -331,7 +314,7 @@ export default function RoomPage() {
   if (needsPassword) return (
     <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', padding: '1rem' }}>
       <div style={{ width: '100%', maxWidth: 360, border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '1.5rem', background: 'var(--surface)' }}>
-        <h2 style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem' }}>🔒 {room.label || room.slug}</h2>
+        <h2 style={{ fontWeight: 600, fontSize: '1rem', marginBottom: '0.25rem' }}>{room.label || room.slug}</h2>
         <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginBottom: '1rem' }}>this room is password protected</p>
         <form onSubmit={submitPassword} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div>
@@ -346,7 +329,7 @@ export default function RoomPage() {
           {pwError && <p style={{ fontSize: '0.78rem', color: 'var(--error)' }}>{pwError}</p>}
           <button type="submit" style={{ padding: '0.5rem', borderRadius: 6, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: '0.875rem', fontWeight: 500, cursor: 'pointer' }}>enter room</button>
         </form>
-        <button onClick={() => router.push('/')} style={{ marginTop: '0.75rem', color: 'var(--muted)', background: 'none', border: 'none', fontSize: '0.8rem', cursor: 'pointer' }}>← back</button>
+        <button onClick={() => router.push('/')} style={{ marginTop: '0.75rem', color: 'var(--muted)', background: 'none', border: 'none', fontSize: '0.8rem', cursor: 'pointer' }}>back</button>
       </div>
     </main>
   )
@@ -355,17 +338,16 @@ export default function RoomPage() {
     <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', maxWidth: 760, margin: '0 auto', padding: '1rem' }}>
       <header style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <button onClick={() => router.push('/')} style={{ color: 'var(--muted)', background: 'none', border: 'none', fontSize: '0.875rem', cursor: 'pointer', padding: 0 }}>← lobby</button>
+          <button onClick={() => router.push('/')} style={{ color: 'var(--muted)', background: 'none', border: 'none', fontSize: '0.875rem', cursor: 'pointer', padding: 0 }}>back</button>
           <h1 style={{ fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.02em' }}>{room.label || room.slug}</h1>
           {room.label && <span style={{ color: 'var(--muted)', fontSize: '0.75rem' }}>/{room.slug}</span>}
-          {room.has_password && <span style={{ fontSize: '0.72rem', color: 'var(--muted)' }}>🔒</span>}
+          {room.has_password && <span style={{ fontSize: '0.72rem', color: 'var(--muted)', border: '1px solid var(--border)', borderRadius: 4, padding: '0.1rem 0.35rem' }}>e2e</span>}
         </div>
         <span style={{ fontSize: '0.72rem', padding: '0.15rem 0.55rem', border: '1px solid var(--border)', borderRadius: 99, color: 'var(--muted)' }}>
           {timeLeft(room.expires_at)}
         </span>
       </header>
 
-      {/* messages */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.25rem', minHeight: 300, maxHeight: 'calc(100dvh - 220px)', padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 8, marginBottom: '0.75rem' }}>
         {messages.length === 0 && <p style={{ color: 'var(--muted)', margin: 'auto', fontSize: '0.875rem' }}>no messages yet. say something.</p>}
         {messages.map(m => {
@@ -398,7 +380,6 @@ export default function RoomPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* reply indicator */}
       {replyTo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.35rem 0.65rem', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--surface)', marginBottom: '0.4rem', fontSize: '0.78rem' }}>
           <span style={{ color: 'var(--muted)' }}>replying to</span>
@@ -406,11 +387,10 @@ export default function RoomPage() {
           <span style={{ color: 'var(--muted)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {(cryptoKey ? (decryptedMessages[replyTo.id] ?? replyTo.content) : replyTo.content).slice(0, 60)}
           </span>
-          <button onClick={clearReply} style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', padding: 0 }}>✕</button>
+          <button onClick={clearReply} style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.8rem', padding: 0 }}>x</button>
         </div>
       )}
 
-      {/* input + options row */}
       <form onSubmit={sendMessage} style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
         <div style={{ display: 'flex', gap: '0.4rem', alignItems: 'center' }}>
           <input value={username} onChange={e => setUsername(e.target.value)}
@@ -423,13 +403,10 @@ export default function RoomPage() {
             {sending ? '...' : 'send'}
           </button>
 
-          {/* options dropdown — bottom right */}
           <div ref={optionsRef} style={{ position: 'relative', flexShrink: 0 }}>
-            <button type="button"
-              onClick={() => setShowOptions(o => !o)}
-              aria-label="options"
+            <button type="button" onClick={() => setShowOptions(o => !o)} aria-label="options"
               style={{ padding: '0.5rem 0.65rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--muted)', fontSize: '0.85rem', cursor: 'pointer' }}>
-              ⋯
+              ...
             </button>
             {showOptions && (
               <div style={{
@@ -443,13 +420,13 @@ export default function RoomPage() {
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'none', border: 'none', fontSize: '0.82rem', color: 'var(--fg)', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  ↓ export as JSON
+                  export as JSON
                 </button>
                 <button type="button" onClick={() => exportChat('txt')}
                   style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', background: 'none', border: 'none', fontSize: '0.82rem', color: 'var(--fg)', cursor: 'pointer' }}
                   onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface2)')}
                   onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  ↓ export as TXT
+                  export as TXT
                 </button>
                 {room.has_password && room.password_removable && authedToken && (
                   <>

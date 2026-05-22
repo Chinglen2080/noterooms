@@ -32,46 +32,90 @@ function timeLeft(expiresAt: string): string {
 const s = {
   page: { minHeight: '100dvh', maxWidth: 900, margin: '0 auto', padding: '2rem 1rem' } as React.CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 8, padding: '1rem', background: 'var(--surface)', marginBottom: '1rem' } as React.CSSProperties,
-  label: { fontSize: '0.72rem', color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginBottom: '0.5rem', display: 'block' } as React.CSSProperties,
-  inp: { padding: '0.5rem 0.75rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--fg)', fontSize: '0.875rem' } as React.CSSProperties,
+  label: { fontSize: '0.72rem', color: 'var(--muted)', textTransform: 'uppercase' as const, letterSpacing: '0.05em', fontWeight: 600, marginBottom: '0.5rem', display: 'block' } as React.CSSProperties,
+  inp: { padding: '0.5rem 0.75rem', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--fg)', fontSize: '0.875rem', width: '100%' } as React.CSSProperties,
   btn: (accent = false) => ({ padding: '0.4rem 0.9rem', borderRadius: 6, border: `1px solid ${accent ? 'transparent' : 'var(--border)'}`, background: accent ? 'var(--accent)' : 'transparent', color: accent ? '#fff' : 'var(--muted)', fontSize: '0.78rem', fontFamily: 'inherit', cursor: 'pointer' } as React.CSSProperties),
   dangerBtn: { padding: '0.3rem 0.7rem', borderRadius: 5, border: '1px solid var(--error)', background: 'transparent', color: 'var(--error)', fontSize: '0.75rem', fontFamily: 'inherit', cursor: 'pointer' } as React.CSSProperties,
 }
 
 export default function AdminPage() {
   const router = useRouter()
+
+  // auth state
   const [authed, setAuthed] = useState(false)
+  const [token, setToken] = useState('')
   const [pw, setPw] = useState('')
   const [pwErr, setPwErr] = useState('')
+  const [requiresChange, setRequiresChange] = useState(false)
+
+  // first-run setup state
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
+  const [setupMain, setSetupMain] = useState('')
+  const [setupDuress, setSetupDuress] = useState('')
+  const [setupErr, setSetupErr] = useState('')
+  const [setupDone, setSetupDone] = useState(false)
+
+  // admin data
   const [rooms, setRooms] = useState<Room[]>([])
   const [recentMsgs, setRecentMsgs] = useState<Message[]>([])
   const [activeTab, setActiveTab] = useState<'rooms' | 'messages'>('rooms')
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [actionMsg, setActionMsg] = useState('')
 
+  // check setup status on mount
+  useEffect(() => {
+    fetch('/api/admin/setup')
+      .then(r => r.json())
+      .then(d => setNeedsSetup(d.needsSetup))
+  }, [])
+
+  async function handleSetup(e: React.FormEvent) {
+    e.preventDefault()
+    setSetupErr('')
+    const res = await fetch('/api/admin/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mainPassword: setupMain, duressPassword: setupDuress }),
+    })
+    if (res.ok) {
+      setSetupDone(true)
+      setNeedsSetup(false)
+    } else {
+      const d = await res.json()
+      setSetupErr(d.error || 'setup failed')
+    }
+  }
+
   async function login(e: React.FormEvent) {
     e.preventDefault()
+    setPwErr('')
     const res = await fetch('/api/admin/auth', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: pw }),
+      body: JSON.stringify({ password: pw }),
     })
-    if (res.ok) { setAuthed(true) }
-    else { setPwErr('wrong password') }
+    if (res.ok) {
+      const d = await res.json()
+      setToken(d.token)
+      setRequiresChange(d.requiresChange ?? false)
+      setAuthed(true)
+    } else {
+      setPwErr('wrong password')
+    }
   }
 
   useEffect(() => {
-    if (!authed) return
-    fetch('/api/admin/rooms', { headers: { 'x-admin-secret': pw } })
+    if (!authed || !token) return
+    fetch('/api/admin/rooms', { headers: { 'x-admin-token': token } })
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setRooms(d) })
-    fetch('/api/admin/messages', { headers: { 'x-admin-secret': pw } })
+    fetch('/api/admin/messages', { headers: { 'x-admin-token': token } })
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setRecentMsgs(d) })
-  }, [authed, pw])
+  }, [authed, token])
 
   async function deleteRoom(roomId: string) {
     const res = await fetch(`/api/admin/rooms/${roomId}`, {
       method: 'DELETE',
-      headers: { 'x-admin-secret': pw },
+      headers: { 'x-admin-token': token },
     })
     if (res.ok) {
       setRooms(r => r.filter(x => x.id !== roomId))
@@ -83,7 +127,7 @@ export default function AdminPage() {
   async function deleteMessage(msgId: string) {
     const res = await fetch(`/api/admin/messages/${msgId}`, {
       method: 'DELETE',
-      headers: { 'x-admin-secret': pw },
+      headers: { 'x-admin-token': token },
     })
     if (res.ok) {
       setRecentMsgs(m => m.filter(x => x.id !== msgId))
@@ -91,12 +135,47 @@ export default function AdminPage() {
     }
   }
 
+  // loading
+  if (needsSetup === null) return (
+    <main style={{ minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>loading...</p>
+    </main>
+  )
+
+  // first-run setup screen
+  if (needsSetup && !setupDone) return (
+    <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '2rem' }}>
+      <h1 style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>first-run setup</h1>
+      <p style={{ fontSize: '0.85rem', color: 'var(--muted)', textAlign: 'center', maxWidth: 320 }}>
+        set your admin password and a duress password.<br />
+        <span style={{ fontSize: '0.78rem' }}>the duress password shows an empty panel to an attacker and logs the event.</span>
+      </p>
+      <form onSubmit={handleSetup} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', width: '100%', maxWidth: 300 }}>
+        <div>
+          <label style={s.label}>admin password</label>
+          <input type="password" value={setupMain} onChange={e => setSetupMain(e.target.value)}
+            placeholder="choose a strong password" style={s.inp} autoFocus />
+        </div>
+        <div>
+          <label style={s.label}>duress password</label>
+          <input type="password" value={setupDuress} onChange={e => setSetupDuress(e.target.value)}
+            placeholder="a different panic password" style={s.inp} />
+        </div>
+        {setupErr && <p style={{ fontSize: '0.8rem', color: 'var(--error)' }}>{setupErr}</p>}
+        <button type="submit" style={{ ...s.btn(true), width: '100%', padding: '0.5rem' }}>set passwords</button>
+      </form>
+    </main>
+  )
+
+  // login screen
   if (!authed) return (
     <main style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
       <h1 style={{ fontWeight: 700, letterSpacing: '-0.02em' }}>admin</h1>
+      {setupDone && <p style={{ fontSize: '0.8rem', color: 'var(--accent)' }}>passwords set — log in</p>}
+      {requiresChange && <p style={{ fontSize: '0.8rem', color: 'var(--error)' }}>password change required</p>}
       <form onSubmit={login} style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: 280 }}>
         <input type="password" value={pw} onChange={e => setPw(e.target.value)}
-          placeholder="admin secret" style={{ ...s.inp, width: '100%' }} autoFocus />
+          placeholder="admin password" style={{ ...s.inp }} autoFocus />
         {pwErr && <p style={{ fontSize: '0.8rem', color: 'var(--error)' }}>{pwErr}</p>}
         <button type="submit" style={{ ...s.btn(true), width: '100%' }}>enter</button>
       </form>
@@ -113,17 +192,15 @@ export default function AdminPage() {
         {actionMsg && <span style={{ fontSize: '0.78rem', color: 'var(--accent)' }}>{actionMsg}</span>}
       </div>
 
-      {/* stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '0.6rem', marginBottom: '1.5rem' }}>
-        {[['total rooms', rooms.length], ['active rooms', rooms.filter(r => new Date(r.expires_at) > new Date()).length], ['expired rooms', rooms.filter(r => new Date(r.expires_at) <= new Date()).length], ['recent messages', recentMsgs.length]].map(([k, v]) => (
-          <div key={k as string} style={{ ...s.card, padding: '0.85rem', marginBottom: 0 }}>
+        {([['total rooms', rooms.length], ['active rooms', rooms.filter(r => new Date(r.expires_at) > new Date()).length], ['expired rooms', rooms.filter(r => new Date(r.expires_at) <= new Date()).length], ['recent messages', recentMsgs.length]] as [string, number][]).map(([k, v]) => (
+          <div key={k} style={{ ...s.card, padding: '0.85rem', marginBottom: 0 }}>
             <p style={{ fontSize: '1.25rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{v}</p>
             <p style={{ fontSize: '0.72rem', color: 'var(--muted)', marginTop: '0.1rem' }}>{k}</p>
           </div>
         ))}
       </div>
 
-      {/* tabs */}
       <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem' }}>
         {(['rooms', 'messages'] as const).map(t => (
           <button key={t} onClick={() => setActiveTab(t)}

@@ -9,10 +9,12 @@ function getSupabase() {
   )
 }
 
-async function ensureDefaultPasswords(supabase: ReturnType<typeof createClient>) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SB = ReturnType<typeof createClient> & { from: (t: string) => any }
+
+async function ensureDefaultPasswords(supabase: SB) {
   const { data } = await supabase.from('admin_passwords').select('id').limit(1)
   if (data && data.length > 0) return
-  // Seed defaults so the site works immediately after deploy
   const mainHash = await hashPassword('password')
   const duressHash = await hashPassword('duresspassword')
   await supabase.from('admin_passwords').insert([
@@ -28,7 +30,7 @@ export async function POST(req: Request) {
   const adminToken = process.env.ADMIN_TOKEN
   if (!adminToken) return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
 
-  const supabase = getSupabase()
+  const supabase = getSupabase() as SB
   await ensureDefaultPasswords(supabase)
 
   const { data: adminPws } = await supabase.from('admin_passwords').select('*')

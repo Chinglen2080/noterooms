@@ -2,17 +2,17 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { hashPassword, verifyPassword } from '@/lib/crypto'
 
-function getSupabase() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySupabase = any
+
+function getSupabase(): AnySupabase {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   )
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SB = ReturnType<typeof createClient> & { from: (t: string) => any }
-
-async function ensureDefaultPasswords(supabase: SB) {
+async function ensureDefaultPasswords(supabase: AnySupabase) {
   const { data } = await supabase.from('admin_passwords').select('id').limit(1)
   if (data && data.length > 0) return
   const mainHash = await hashPassword('password')
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const adminToken = process.env.ADMIN_TOKEN
   if (!adminToken) return NextResponse.json({ error: 'Server misconfigured' }, { status: 500 })
 
-  const supabase = getSupabase() as SB
+  const supabase: AnySupabase = getSupabase()
   await ensureDefaultPasswords(supabase)
 
   const { data: adminPws } = await supabase.from('admin_passwords').select('*')

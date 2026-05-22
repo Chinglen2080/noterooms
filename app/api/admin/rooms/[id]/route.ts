@@ -1,0 +1,16 @@
+import { getSupabase } from '@/lib/supabase'
+import { NextResponse } from 'next/server'
+
+function checkAuth(req: Request) {
+  return req.headers.get('x-admin-secret') === process.env.ADMIN_SECRET
+}
+
+export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  if (!checkAuth(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const { id } = await params
+  const supabase = getSupabase()
+  // cascade deletes messages too (via FK)
+  const { error } = await supabase.from('rooms').delete().eq('id', id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
